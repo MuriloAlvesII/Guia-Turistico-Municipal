@@ -7,6 +7,7 @@
 #uvicorn main:app --reload
 import DataBase  
 import BeseModels
+import Schemas
 
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
@@ -24,40 +25,6 @@ async def spawn(app: FastAPI):
 
 
 app = FastAPI(title="API Guia Turístico Municipal", version="2.0.0", lifespan=spawn)
-
-
-# ── helpers ─────────────
-
-def encontrar_usurio(id: str) -> BeseModels.Usuario:
-    with DataBase.get_conexao() as conexao:
-        usuario = conexao.execute(
-            """
-            SELECT id FROM Usuarios
-            WHERE id = ?
-            """,(id)
-        ).fetchone()
-
-        if usuario is None:
-            raise HTTPException(status_code=404, detail="Esse usuario não foi encontrado")
-        
-        #pega os dados colhidos do BD e os tranfoman em um objeto py.
-        return BeseModels.Usuario(id=usuario["id"], nome=usuario["nome"], email=usuario["email"])
-        
-def encontrar_ponto_turistico(id: str) -> BeseModels.Ponto_Turistico:
-    with DataBase.get_conexao() as conexao:
-        ponto = conexao.execute(
-            """
-            SELECT id FROM Pontos_Turisticos
-            WHERE id = ?
-            """,(id)
-        ).fetchone()
-
-        if ponto is None:
-            raise HTTPException(status_code=404, detail="Esse Ponto Turistico não foi encontrado")
-        
-        #pega os dados colhidos do BD e os tranfoman em um objeto py.
-        return BeseModels.Ponto_Turistico(id=ponto["id"], nome=ponto["nome"], descricao=ponto["descricao"],
-        localizacao_mapa=ponto["localizacao_mapa"], categoria=ponto["categoria"])
 
 
 # ── Usuario ─────────────
@@ -109,7 +76,7 @@ def listar_usuarios():
 
 @app.get("/Usuarios/{id}", response_model=BeseModels.Usuario)
 def buscar_usuario(id: str):
-    return encontrar_usurio(id)  # helper lança 404 se não existir
+    return Schemas.encontrar_usurio(id)  # helper lança 404 se não existir
 
 @app.put("/Usuarios/{id}", response_model=BeseModels.Usuario)
 def editar_usuario(id: str, dados: BeseModels.Usuario_Cadastro):
@@ -178,11 +145,11 @@ def Listar_pontos_turisticos():
 
 @app.get("/Pontos_Turisticos/{id}", response_model= BeseModels.Ponto_Turistico) # Referente ao RF005 e um basico do RF004
 def Buscar_detalhes_ponto_turistico(id: str):
-    return encontrar_ponto_turistico(id)
+    return Schemas.encontrar_ponto_turistico(id)
 
 @app.get("/Pontos_Turisticos/{id}/localizacao")# Referente ao RF006
 def Visualizar_localizacao(id: str):
-    ponto = encontrar_ponto_turistico(id)
+    ponto = Schemas.encontrar_ponto_turistico(id)
     return{"nome":ponto.nome,   "localizacao_mapa": ponto.localizacao_mapa}
 
 @app.put("/Pontos_Turisticos/{id}", response_model=BeseModels.Ponto_Turistico)# Permiter Atualizar/Modifica esses Pontos Turisticos
