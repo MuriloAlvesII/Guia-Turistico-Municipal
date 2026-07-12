@@ -1,3 +1,5 @@
+#BeseModels
+
 from pydantic import BaseModel , EmailStr
 
 # ── Usuario ──────────────────────────
@@ -8,6 +10,7 @@ class Usuario_Base(BaseModel):
 class Usuario_Cadastro(Usuario_Base): # RF001
     nome: str
     senha: str
+    administrador: int = 0
 
 class Usuario_BD(Usuario_Cadastro):
     id: str
@@ -18,6 +21,8 @@ class Usuario_Login(Usuario_Base): # RF002
 class Usuario(Usuario_Base):
     id: str
     nome: str
+
+
 
 # ── Ponto Turistico ─────
 
@@ -35,3 +40,6 @@ class Ponto_Turistico(Ponto_Turistico_Entrada):
 class Mensagem_Retorno(BaseModel):
     status: str
     mensagem: str
+
+class Adim_Mensagem_Retorno(Mensagem_Retorno):
+    api_key: str

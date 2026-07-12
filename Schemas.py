@@ -1,3 +1,5 @@
+#Schemas
+
 import DataBase
 import BeseModels
 from fastapi import FastAPI, HTTPException
@@ -5,12 +7,12 @@ from fastapi import FastAPI, HTTPException
 # ── helpers ─────────────
 
 def encontrar_usurio(id: str) -> BeseModels.Usuario:
-    with DataBase.get_conexao() as conexao:
+    with DataBase.DateBase.get_conexao() as conexao:
         usuario = conexao.execute(
             """
-            SELECT id FROM Usuarios
+            SELECT * FROM Usuarios
             WHERE id = ?
-            """,(id)
+            """,(id,)
         ).fetchone()
 
         if usuario is None:
@@ -20,12 +22,12 @@ def encontrar_usurio(id: str) -> BeseModels.Usuario:
         return BeseModels.Usuario(id=usuario["id"], nome=usuario["nome"], email=usuario["email"])
         
 def encontrar_ponto_turistico(id: str) -> BeseModels.Ponto_Turistico:
-    with DataBase.get_conexao() as conexao:
+    with DataBase.DateBase.get_conexao() as conexao:
         ponto = conexao.execute(
             """
-            SELECT id FROM Pontos_Turisticos
+            SELECT * FROM Pontos_Turisticos
             WHERE id = ?
-            """,(id)
+            """,(id,)
         ).fetchone()
 
         if ponto is None:

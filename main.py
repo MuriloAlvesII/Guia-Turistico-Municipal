@@ -1,3 +1,4 @@
+#Main
 
 # Remove-Item -Recurse -Force .venv apaga venv
 # python -m venv .venv cria venv
@@ -8,9 +9,11 @@
 import DataBase  
 import BeseModels
 import Schemas
+import Seguranca
+import Factory
 
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from typing import List
 import uuid
 import sqlite3
@@ -19,7 +22,7 @@ import sqlite3
 @asynccontextmanager
 async def spawn(app: FastAPI):
     #ao inicializa a api, executa a criacao das tabelas.
-    DataBase.init_db()
+    DataBase.DateBase.init_db()
     #ser necesario, o yield executa no enceramento.
     yield
 
@@ -32,25 +35,30 @@ app = FastAPI(title="API Guia Turístico Municipal", version="2.0.0", lifespan=s
 
 @app.post("/Usuarios_Cadastro", response_model=BeseModels.Mensagem_Retorno, status_code=201)# Referente a RF001
 def Cadastra_usuario(dados: BeseModels.Usuario_Cadastro):
-    novo_usuario = BeseModels.Usuario_BD(id=str(uuid.uuid4()), **dados.model_dump())
-    with DataBase.init_db() as conexao:
-        conexao.execute(
-        """
-        INSERT INTO usuarios (id, nome, email, senha)
-        VALUES (?, ?, ?, ?)
-        """,(novo_usuario.id,novo_usuario.email,novo_usuario.nome,novo_usuario.senha)
-        )
-        conexao.commit()
+    novo_usuario = Factory.UsuarioFactory.criar(dados)
+    with DataBase.DateBase.get_conexao() as conexao:
+        try:
+            conexao.execute(
+                """
+                INSERT INTO usuarios (id, nome, email, senha, administrador)
+                VALUES (?, ?, ?, ?, ?)
+                """,(novo_usuario.id,novo_usuario.nome,novo_usuario.email,novo_usuario.senha, novo_usuario.administrador)
+                )
+            conexao.commit()
+
+        except sqlite3.IntegrityError:
+            raise HTTPException( status_code=409, detail="Este e-mail já está cadastrado.")
+        
     return BeseModels.Mensagem_Retorno(status="Sucesso", mensagem="A Conta foi criada!!")
 
 @app.post("/Usuarios_Login", response_model=BeseModels.Mensagem_Retorno)# Referente a RF002
 def Login_usuario(dados: BeseModels.Usuario_Login):
-    with DataBase.get_conexao() as conexao:
+    with DataBase.DateBase.get_conexao() as conexao:
         usuario = conexao.execute(
             """
             SELECT * FROM Usuarios
             WHERE email = ? AND senha = ?
-            """,(dados.email, dados.senha)
+            """,(dados.email, Seguranca.gerar_hash(dados.senha))
         ).fetchone()#ele retona o usuario encontrado ou none(nada)
 
         if usuario:#ser a senha entrege pelo usuario for igual a amazenada no servidor, sera um sucesso.
@@ -58,14 +66,32 @@ def Login_usuario(dados: BeseModels.Usuario_Login):
         
     raise HTTPException(status_code=401, detail="O E-mail ou a senha estao incorretos")
 
+@app.post("/Administrador/Login")# Referente a RF007
+def login_admin(dados: BeseModels.Usuario_Login):
+    with DataBase.DateBase.get_conexao() as conexao:
+        admin = conexao.execute(
+        """
+        SELECT * FROM Usuarios
+        WHERE email = ? AND administrador = 1
+        """,(dados.email,)
+    ).fetchone()
+        
+    if admin is None:
+        raise HTTPException( status_code=401, detail="Administrador não encontrado.")
+    
+    if admin["senha"] != Seguranca.gerar_hash(dados.senha):
+        raise HTTPException(status_code=401, detail="Senha incorreta.")
+
+    return BeseModels.Adim_Mensagem_Retorno(status="Sucesso", mensagem="Administrador autenticado.", api_key=Seguranca.API_KEY)
+    
 @app.get("/Usuarios", response_model=List[BeseModels.Usuario])
 def listar_usuarios():
-    with DataBase.get_conexao() as conexao:
+    with DataBase.DateBase.get_conexao() as conexao:
         usuarios = conexao.execute(
             """
             SELECT id, nome, email FROM Usuarios
             """
-        ).fetchone()
+        ).fetchall()
     
     resultado = []#amazena os objetos aqui.
 
@@ -80,13 +106,13 @@ def buscar_usuario(id: str):
 
 @app.put("/Usuarios/{id}", response_model=BeseModels.Usuario)
 def editar_usuario(id: str, dados: BeseModels.Usuario_Cadastro):
-    with DataBase.get_conexao() as conexao:
+    with DataBase.DateBase.get_conexao() as conexao:
         cursor = conexao.execute(
             """
             UPDATE Usuarios
             SET nome = ?, email = ?, senha = ?
             WHERE id = ?
-            """,(dados.nome, dados.email, dados.senha, id)
+            """,(dados.nome, dados.email, Seguranca.gerar_hash(dados.senha), id)
         )
         conexao.commit()
 
@@ -97,7 +123,7 @@ def editar_usuario(id: str, dados: BeseModels.Usuario_Cadastro):
 
 @app.delete("/Usuarios/{id}", status_code=204)
 def remover_usuario(id: str):
-    with DataBase.get_conexao() as conexao:
+    with DataBase.DateBase.get_conexao() as conexao:
         cursor = conexao.execute(
             """
             DELETE FROM usuarios
@@ -114,9 +140,9 @@ def remover_usuario(id: str):
 
 
 @app.post("/Pontos_Turisticos", response_model=BeseModels.Ponto_Turistico, status_code=201)# Permiter cadastra Pontos Turisticos
-def Cadastra_ponto_turisticos(dados: BeseModels.Ponto_Turistico_Entrada):
-    novo_ponto = BeseModels.Ponto_Turistico(id=str(uuid.uuid4()), **dados.model_dump())
-    with DataBase.get_conexao() as conexao:
+def Cadastra_ponto_turisticos(dados: BeseModels.Ponto_Turistico_Entrada, api_key: str = Depends(Seguranca.verificar_key)):
+    novo_ponto = Factory.PontoFactory.criar(dados)
+    with DataBase.DateBase.get_conexao() as conexao:
         conexao.execute(
             """
             INSERT INTO Pontos_Turisticos
@@ -130,7 +156,7 @@ def Cadastra_ponto_turisticos(dados: BeseModels.Ponto_Turistico_Entrada):
 
 @app.get("/Pontos_Turisticos", response_model=List[BeseModels.Ponto_Turistico])# Referente ao RF003
 def Listar_pontos_turisticos():
-    with DataBase.get_conexao() as conexao:
+    with DataBase.DateBase.get_conexao() as conexao:
         pontos = conexao.execute(
             "SELECT * FROM pontos_turisticos"
         ).fetchall()
@@ -139,7 +165,7 @@ def Listar_pontos_turisticos():
 
     for ponto in pontos:#pega os dados colhidos do BD e os tranfoman em um objeto py.
         resultado.append(BeseModels.Ponto_Turistico(id=ponto["id"], nome=ponto["nome"],
-        descricao=ponto["descricao"], localizacao_mapa=ponto["localizacao_mapa"], categoria=ponto["categoriaS"]))
+        descricao=ponto["descricao"], localizacao_mapa=ponto["localizacao_mapa"], categoria=ponto["categoria"]))
 
     return resultado#e manda pa a api.
 
@@ -153,8 +179,8 @@ def Visualizar_localizacao(id: str):
     return{"nome":ponto.nome,   "localizacao_mapa": ponto.localizacao_mapa}
 
 @app.put("/Pontos_Turisticos/{id}", response_model=BeseModels.Ponto_Turistico)# Permiter Atualizar/Modifica esses Pontos Turisticos
-def editar_ponto_turistico(id: str, dados: BeseModels.Ponto_Turistico_Entrada):
-    with DataBase.get_conexao() as conexao:
+def editar_ponto_turistico(id: str, dados: BeseModels.Ponto_Turistico_Entrada, api_key: str = Depends(Seguranca.verificar_key)):
+    with DataBase.DateBase.get_conexao() as conexao:
         cursor = conexao.execute(
             """
             UPDATE Pontos_Turisticos
@@ -171,8 +197,8 @@ def editar_ponto_turistico(id: str, dados: BeseModels.Ponto_Turistico_Entrada):
     localizacao_mapa=dados.localizacao_mapa, categoria=dados.categoria)
 
 @app.delete("/Pontos_Turisticos/{id}", status_code=204)# Permiter Apagar/Deleta esses Pontos Turisticos
-def remover_ponto_turistico(id: str):
-    with DataBase.get_conexao() as conexao:
+def remover_ponto_turistico(id: str, api_key: str = Depends(Seguranca.verificar_key)):
+    with DataBase.DateBase.get_conexao() as conexao:
         cursor = conexao.execute(
             """
             DELETE FROM pontos_turisticos
