@@ -22,7 +22,7 @@ class DateBase:
     def init_db(clas):
         """Ser não encontra uma tabela, ser ela ainda não existir, cria a mesma, a mesma mudaca fei ai em cima"""
         conexao = clas.get_conexao()
-        conexao.execute("""                
+        conexao.executescript("""                
                 
                 CREATE TABLE IF NOT EXISTS Usuarios (
                     id        TEXT PRIMARY KEY,

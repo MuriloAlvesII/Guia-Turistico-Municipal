@@ -6,6 +6,7 @@
 # uv pip install fastapi uvicorn  
 #pip install "pydantic[email]" 
 #uvicorn main:app --reload
+
 import DataBase  
 import BeseModels
 import Schemas
@@ -22,7 +23,7 @@ import sqlite3
 @asynccontextmanager
 async def spawn(app: FastAPI):
     #ao inicializa a api, executa a criacao das tabelas.
-    DataBase.DateBase.init_db()
+    DataBase.DateBase.get_conexao()
     #ser necesario, o yield executa no enceramento.
     yield
 
